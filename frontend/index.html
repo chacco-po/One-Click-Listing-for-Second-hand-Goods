@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>闲置物品一键上架</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📦 闲置物品一键上架
+      <span class="brand-sub">拍照 → 抠图 → 识别 → 定价 → 上架</span>
+    </div>
+    <nav class="nav">
+      <button id="nav-workbench" class="nav-btn active">工作台</button>
+      <button id="nav-shop" class="nav-btn">商城 <span id="shop-count" class="badge">0</span></button>
+      <button id="nav-products" class="nav-btn">我的商品 <span id="product-count" class="badge">0</span></button>
+      <button id="nav-drafts" class="nav-btn">草稿箱 <span id="draft-count" class="badge">0</span></button>
+      <span class="nav-sep"></span>
+      <button id="btn-auth" class="nav-btn auth-btn">登录</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- ============ 工作台 ============ -->
+    <section id="view-workbench">
+      <!-- 步骤1 上传 -->
+      <div class="card" id="card-upload">
+        <div class="card-head"><span class="step-no">1</span><h2>上传物品照片</h2></div>
+        <div id="dropzone" class="dropzone">
+          <input type="file" id="file-input" accept="image/*" hidden />
+          <div class="dz-inner">
+            <div class="dz-icon">⬆️</div>
+            <p>拖拽照片到此处，或 <label for="file-input" class="link">点击选择</label></p>
+            <p class="hint">建议：物品居中、背景简洁、光线充足 · 支持 JPG/PNG/WebP，≤ <span id="max-mb">20</span>MB</p>
+          </div>
+        </div>
+        <div class="crop-bar hidden" id="crop-bar">
+          <span class="muted">画面中有多件物品？框选主体可剔除干扰（不影响抠图质量）。</span>
+          <button id="btn-crop" class="btn btn-sm btn-ghost">框选主体</button>
+          <button id="crop-apply" class="btn btn-sm hidden">应用裁剪并重新处理</button>
+          <button id="crop-cancel" class="btn btn-sm btn-ghost hidden">取消</button>
+        </div>
+      </div>
+
+      <!-- 步骤2 处理管线 -->
+      <div class="card hidden" id="card-pipeline">
+        <div class="card-head">
+          <span class="step-no">2</span><h2>智能处理</h2>
+          <div class="pipeline-steps" id="pipeline-steps">
+            <div class="p-step" data-step="segment"><span class="p-dot"></span>主体分割</div>
+            <div class="p-step" data-step="layout"><span class="p-dot"></span>白底图排版</div>
+            <div class="p-step" data-step="recognize"><span class="p-dot"></span>物品识别</div>
+          </div>
+        </div>
+
+        <div class="compare">
+          <figure>
+            <figcaption>原图</figcaption>
+            <div class="img-wrap" id="wrap-original">
+              <img id="img-original" alt="原图" />
+              <div class="crop-overlay hidden" id="crop-overlay"><div class="crop-rect" id="crop-rect"></div></div>
+            </div>
+          </figure>
+          <figure>
+            <figcaption>白底商品图</figcaption>
+            <div class="img-wrap" id="wrap-result">
+              <img id="img-result" alt="白底商品图" />
+            </div>
+          </figure>
+        </div>
+
+        <div class="layout-controls">
+          <label class="ctl">规格
+            <select id="spec-select"></select>
+          </label>
+          <label class="ctl">主体占比
+            <input type="range" id="fill-range" min="50" max="95" value="85" />
+            <span id="fill-value">85%</span>
+          </label>
+          <label class="ctl">锚点
+            <select id="anchor-select">
+              <option value="center">居中</option>
+              <option value="bottom">底部对齐（鞋类）</option>
+            </select>
+          </label>
+          <label class="ctl chk"><input type="checkbox" id="shadow-chk" checked /> 投影</label>
+          <button id="btn-fine-edge" class="btn btn-sm btn-ghost" title="对毛发、透明边缘更精细，速度较慢">精细边缘</button>
+        </div>
+        <div id="layout-warnings" class="warnings hidden"></div>
+      </div>
+
+      <!-- 步骤3 识别结果 -->
+      <div class="card hidden" id="card-recognition">
+        <div class="card-head"><span class="step-no">3</span><h2>识别结果与类目</h2></div>
+        <div id="recognition-body"></div>
+      </div>
+
+      <!-- 步骤4 成色自评 -->
+      <div class="card hidden" id="card-condition">
+        <div class="card-head"><span class="step-no">4</span><h2>成色自评引导</h2></div>
+        <div id="condition-body"></div>
+        <div class="grade-preview">
+          综合成色：<span id="grade-badge" class="grade-badge grade-empty">待评估</span>
+          <button id="btn-manual-grade" class="btn btn-sm btn-ghost">手动调整</button>
+          <select id="manual-grade" class="hidden"></select>
+        </div>
+      </div>
+
+      <!-- 步骤5 参考定价 -->
+      <div class="card hidden" id="card-pricing">
+        <div class="card-head"><span class="step-no">5</span><h2>参考定价</h2></div>
+        <div id="pricing-body"></div>
+        <label class="ctl block">备注（可选，如购买渠道、转手原因）
+          <input type="text" id="draft-notes" placeholder="例如：京东自营购入，搬家闲置" maxlength="200" />
+        </label>
+      </div>
+
+      <!-- 步骤6 标题与描述文案生成 -->
+      <div class="card hidden" id="card-copywriting">
+        <div class="card-head">
+          <span class="step-no">6</span><h2>标题与描述文案生成</h2>
+          <span class="hint">依据识别结果、成色自评与你填写的少量信息生成</span>
+        </div>
+
+        <div class="copy-inputs">
+          <div class="copy-inputs-head">
+            <span class="muted">补充少量信息（可留空，留空也能生成）</span>
+            <button id="btn-generate-copy" class="btn btn-sm btn-primary">生成文案</button>
+          </div>
+          <div class="copy-fields" id="copy-fields"></div>
+        </div>
+
+        <div id="copy-body" class="copy-body">
+          <p class="muted">点击「生成文案」，系统将结合识别结果与成色自评产出标题候选与卖点描述。</p>
+        </div>
+
+        <label class="ctl block">商品名称（发布后展示，可随时修改）
+          <input type="text" id="product-title" placeholder="例如：Nike Air Force 1 白色 42 码" maxlength="60" />
+        </label>
+      </div>
+
+      <div class="actions hidden" id="workbench-actions">
+        <button id="btn-save-draft" class="btn btn-primary">保存上架草稿</button>
+        <button id="btn-publish" class="btn btn-publish">发布上架</button>
+        <button id="btn-reset" class="btn btn-ghost">重新开始</button>
+      </div>
+    </section>
+
+    <!-- ============ 商城 ============ -->
+    <section id="view-shop" class="hidden">
+      <div class="view-head">
+        <h2>闲置商城</h2>
+        <p class="muted" id="shop-hint">所有用户上架的闲置物品都在这里，可直接下单购买；已卖出的商品会打上「已售出」标记。</p>
+      </div>
+
+      <div class="shop-toolbar">
+        <input type="search" id="shop-keyword" placeholder="搜索商品名称 / 类目 / 描述" maxlength="60" />
+        <select id="shop-category">
+          <option value="">全部类目</option>
+        </select>
+        <select id="shop-sort">
+          <option value="latest">最新上架</option>
+          <option value="price_asc">价格从低到高</option>
+          <option value="price_desc">价格从高到低</option>
+        </select>
+        <div class="chip-row" id="shop-filters">
+          <button class="chip active" data-status="">全部</button>
+          <button class="chip" data-status="on_sale">在售</button>
+          <button class="chip" data-status="sold">已售出</button>
+          <button class="chip" data-status="mine">我买到的</button>
+        </div>
+      </div>
+
+      <div class="shop-grid" id="shop-grid"></div>
+      <div class="empty hidden" id="shop-empty">
+        商城里还没有商品。<br />在「工作台」发布一件闲置物品，它就会出现在这里。
+      </div>
+
+      <div class="view-head" style="margin-top:32px">
+        <h2>我的订单</h2>
+      </div>
+      <div class="chip-row" id="order-tabs">
+        <button class="chip active" data-role="buyer">我买到的</button>
+        <button class="chip" data-role="seller">我卖出的</button>
+      </div>
+      <div class="orders-list" id="orders-list"></div>
+      <div class="empty hidden" id="orders-empty">暂无订单记录。</div>
+    </section>
+
+    <!-- ============ 我的商品 ============ -->
+    <section id="view-products" class="hidden">
+      <div class="view-head">
+        <h2>我的商品</h2>
+        <p class="muted" id="products-hint">已发布的商品会显示在这里，可修改名称、价格与状态。</p>
+      </div>
+      <div class="products-grid" id="products-grid"></div>
+      <div class="empty hidden" id="products-empty">
+        还没有已上架的商品。<br />在「工作台」处理一张照片后点击「发布上架」即可。
+      </div>
+    </section>
+
+    <!-- ============ 草稿箱 ============ -->
+    <section id="view-drafts" class="hidden">
+      <div class="drafts-grid" id="drafts-grid"></div>
+      <div class="empty hidden" id="drafts-empty">暂无草稿，回到「工作台」处理一张照片试试吧 👈</div>
+    </section>
+  </main>
+
+  <!-- 草稿详情弹窗 -->
+  <div class="modal hidden" id="draft-modal">
+    <div class="modal-card" id="draft-modal-card"></div>
+  </div>
+
+  <!-- 登录 / 注册弹窗 -->
+  <div class="modal hidden" id="auth-modal">
+    <div class="modal-card auth-card">
+      <div class="modal-head">
+        <h3 id="auth-title">登录</h3>
+        <button class="modal-close" id="auth-close">×</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">用户名</label>
+        <input type="text" id="auth-username" placeholder="3-20 位字母、数字或下划线" maxlength="20" autocomplete="username" />
+        <label class="field-label">密码</label>
+        <input type="password" id="auth-password" placeholder="至少 6 位" maxlength="64" autocomplete="current-password" />
+        <div id="auth-error" class="rec-notice hidden"></div>
+        <div class="modal-foot">
+          <button id="auth-submit" class="btn btn-primary">登录</button>
+          <button id="auth-toggle" class="btn btn-ghost">没有账号？去注册</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提示 -->
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
