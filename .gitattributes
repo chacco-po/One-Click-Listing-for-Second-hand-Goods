@@ -1,0 +1,26 @@
+# 统一换行符：仓库内一律 LF，检出到 Windows 时由 core.autocrlf 处理
+* text=auto eol=lf
+
+# 脚本必须保持 LF，否则在 Linux/macOS 上会因缺少 shebang 解释器而无法执行
+*.sh text eol=lf
+*.py text eol=lf
+
+# Windows 批处理必须 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制不做任何转换
+*.onnx binary
+*.pt binary
+*.pth binary
+*.safetensors binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.db binary
+*.pdf binary
+*.docx binary
+*.pptx binary

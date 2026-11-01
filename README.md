@@ -361,6 +361,25 @@ bash scripts/dev.sh            # 3. 启动，访问 http://127.0.0.1:8765
 10. **CDP 的 `DOM.setFileInputFiles` 在本机不生效**：`files.length` 仍为 0，前端收不到文件，
     表现为 `处理失败：Failed to fetch`。改用 `base64 + DataTransfer` 注入 `<input type=file>` 并派发 `change`，
     行为与用户手动选文件一致。
+11. **onnxruntime 在 Python 3.13 上导入即段错误**（`Segmentation fault`，退出码 139）：
+    服务启动后 2 秒内静默退出，`/ready` 无响应。定位关键在于**分段验证**：
+    - `onnxruntime.dll` 用 ctypes 直调 C API 完全正常（`OrtGetApiBase` 返回有效指针）
+    - 问题只出在 pybind11 绑定层 `onnxruntime_pybind11_state.pyd`
+    - 版本实测：1.31.1 段错误 / 1.22.0 `DLL 初始化例程失败` / **1.20.1 正常**
+    - 与 CPU 指令集（AVX2 齐全）、MSVC 运行库、numpy 版本均无关
+    已在 `requirements.txt` 锁定 `onnxruntime>=1.20,<1.21`，并在 `install.sh` 中加导入校验 + 自动回退。
+12. **pip 官方源在国内慢到无法安装**：实测 PyPI 仅 **10 KB/s**，腾讯云镜像 **960 KB/s**（相差 90 倍）。
+    `torch` 这类 200MB 级别的包，按官方源需数小时。`install.sh` 默认走腾讯云镜像，
+    海外环境可用 `PIP_INDEX_URL=https://pypi.org/simple` 覆盖。
+13. **不要直接 `pip install torch`**：会连带拉入整套 NVIDIA CUDA 运行时（数 GB），
+    无 GPU 环境下既慢又无用。`install.sh` 会装完 torch 后检查 `site-packages/nvidia` 目录，
+    若存在则改用官方 CPU 源重装（实测镜像版 torch 2.15.0+cpu 无 nvidia 依赖，体积仅约 200MB）。
+14. **模型权重不要入库**：`u2net.onnx` 单文件约 168MB，超过 GitHub 单文件 100MB 硬上限。
+    用 `scripts/fetch_models.sh` 预置（已实测镜像源三个权重均可下载，
+    官方 huggingface.co 当时返回 502，故脚本内置多源回退）。
+15. **GitHub 网页版上传会隐藏 `.gitignore`**：这是平台的设计行为（避免上传的忽略规则
+    把同批文件过滤掉），导致点文件永远传不上去。解法是用 git push 而非网页拖拽，
+    见 `scripts/push_to_github.sh`；或网页端用 `Add file → Create new file` 手动创建。
 11. **「加载中就 return」的防抖写法会吞掉筛选条件**：商城列表早期用
     `if (state.shop.loading) return;` 防止重复请求，结果用户在请求飞行期间点「已售出」筛选时，
     **新条件被静默丢弃**，界面毫无反应。正确写法是**请求序号**：每次调用自增 `seq`，

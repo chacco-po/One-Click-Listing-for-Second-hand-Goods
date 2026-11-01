@@ -1,5 +1,22 @@
+# Web 框架与图像基础库
 fastapi>=0.110
 uvicorn[standard]>=0.29
 python-multipart>=0.0.9
 pillow>=10.3
-numpy>=1.26
+
+# numpy 必须 <2.3：
+# 2.5.x 与 numba / pymatting（rembg 依赖链）存在 ABI 隐患，
+# 且 onnxruntime 对 numpy 版本也有隐式要求，锁区间最稳。
+numpy>=1.26,<2.3
+
+# AI 推理依赖（版本经过实测验证，详见 scripts/install.sh 的踩坑说明）：
+# onnxruntime 1.31.1 / 1.22.0 在 Python 3.13 上会段错误或 DLL 加载失败，
+# 1.20.1 经实测稳定可用，故在此锁定上限。
+onnxruntime>=1.20,<1.21
+rembg>=2.0.60
+ultralytics>=8.3.0
+opencv-python-headless>=4.9
+
+# 测试与工具
+httpx>=0.27
+websocket-client>=1.7
